@@ -3,24 +3,8 @@
 {% block body %}
   <div class="jumbotron text-center">
     <h1 class="header center blue-text style=color:#0d47a1;"">Eat Easy</h1>
-    <p class="lead">This application is built on the Python Flask framework and is the focus for the "Python Flask From Scratch" YouTube series</p>
+    <p class="lead">INSERT WORDS HERE</p>
 
-      <h1>Search a Restuarant</h1>
-	  <form action="" method="POST">
-	    <div class="form-group">
-	      <label>Restuarant</label>
-	      <input type="text" name="restuarant" class="form-control" value={{request.form.restuarant}}>
-	    </div>
-	    <div class="form-group">
-	      <label>Likes, Preferences</label>
-	      <input type="text" name="likes" class="form-control" value={{request.form.likes}}>
-	    </div>
-	    <div class="form-group">
-	      <label>Allergies, Dislikes</label>
-	      <input type="text" name="allergies" class="form-control" value={{request.form.allergies}}>
-	    </div>
-	    <button type="submit" class="btn btn-primary">Submit</button>
-	  </form>
 
     {% if session.logged_in == NULL %}
       <a href="/register" class="btn btn-primary btn-lg">Register</a>

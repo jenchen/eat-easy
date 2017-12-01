@@ -11,7 +11,7 @@ app = Flask(__name__)
 app.config['MYSQL_HOST'] = 'localhost'
 app.config['MYSQL_USER'] = 'root'
 app.config['MYSQL_PASSWORD'] = 'mysqlwhy'
-app.config['MYSQL_DB'] = 'myflaskapp' ##eateasyapp
+app.config['MYSQL_DB'] = 'eateasyapp'
 app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
 # init MYSQL
 mysql = MySQL(app)
@@ -19,104 +19,94 @@ mysql = MySQL(app)
 #Articles = Articles()
 
 # Index
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/')
 def index():
-    if request.method == 'POST':
+    return render_template('home.html')
+
+
+@app.route('/search', methods=['GET', 'POST'])
+def search():
+    form = RestaurantSearchForm(request.form)
+    if request.method == 'POST' and form.validate():
         # Get Form Fields
-        username = request.form['restuarant']
+        restaurant = request.form['restaurant']
         likes = request.form['likes']
-        dislikes = request.form['dislikes']
+        allergies = request.form['allergies']
 
         # Create cursor
         cur = mysql.connection.cursor()
 
         # Get menu items after apply filters
-        sql_query = """
-        SELECT r.business_id, r.menu_item, r.rec_rating
-        FROM recommender_table AS r, scraper_table AS s
-        WHERE username = %s
-            AND s.name = %s
-            AND s.business_id = r.business_id
-            AND s.description LIKE '%' + %s + '%'
-            AND s.description LIKE '%' + %s + '%'
-        """
-        results = cur.execute(sql_query, [restuarant, likes, allergies])
+        sql_query = (
+            "SELECT s.menu_item, s.description, s.price, r.rec_rating "
+            "FROM r_table AS r, s_table AS s "
+            "WHERE s.rest_name = %(restaurant)s "
+            "AND s.business_id = r.business_id "
+            "AND s.menu_item = r.menu_item "
+            "AND s.description LIKE %(likes)s "
+            "AND s.description NOT LIKE %(allergies)s "
+            "ORDER BY r.rec_rating DESC"
+        )
+
+        results = cur.execute(sql_query, {'restaurant': restaurant, 'likes': '%'+likes+'%', 'allergies': '%'+allergies+'%'})
+
+        data = cur.fetchall()
         # Close connection
-        cur.close()
+        #cur.close()
 
         if results > 0:
-            data = cur.fetchall()
-            return render_template('results.html', results=results)
+            return render_template('results.html', restaurant=restaurant, results=data)
         else:
-            msg = 'No Matching Restuarant Found'
+            msg = 'No Matching Restaurant Found'
             return render_template('results.html', msg=msg)
+    return render_template('search.html')
 
-            """
-            # Compare Passwords
-            if sha256_crypt.verify(password_candidate, password):
-                # Passed
-                session['logged_in'] = True
-                session['username'] = username
+# Restaurant Search Form Class
+class RestaurantSearchForm(Form):
+    restaurant = StringField('Restaurant', [validators.Length(min=1, max=50)])
+    likes = StringField('Likes', [validators.Length(min=2, max=25)])
+    allergies = StringField('Allergies', [validators.Length(min=2, max=25)])
 
-                flash('You are now logged in', 'success')
-                return redirect(url_for('dashboard'))
-            else:
-                error = 'Invalid search'
-                return render_template('home.html', error=error)
+# Restaurants
+@app.route('/restaurants')
+def restaurants():
+    # Create cursor
+    cur = mysql.connection.cursor()
 
-            # Close connection
-            cur.close()
-            
-        else:
-            error = 'Restuarant not found'
-            return render_template('home.html', error=error)
-    return render_template('home.html')
-    """
+    # Get restaurants
+    result = cur.execute("SELECT DISTINCT(rest_name) FROM s_table")
 
-# Restuarant Search Form Class
-class RestuarantSearchForm(Form):
-    restuarant = StringField('Restuarant', [validators.Length(min=1, max=50)])
-    likes = StringField('Likes', [validators.Length(min=4, max=25)])
-    allergies = StringField('Allergies', [validators.Length(min=4, max=25)])
-    
-# Make restuarant search
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        # Get Form Fields
-        username = request.form['username']
-        password_candidate = request.form['password']
+    restaurants = cur.fetchall()
 
-        # Create cursor
-        cur = mysql.connection.cursor()
+    if result > 0:
+        return render_template('restaurants.html', restaurants=restaurants)
+    else:
+        msg = 'No Restaurants Found'
+        return render_template('restaurants.html', msg=msg)
+    # Close connection
+    cur.close()
 
-        # Get user by username
-        result = cur.execute("SELECT * FROM users WHERE username = %s", [username])
+#Single Restaurant
+@app.route('/restaurant/<string:name>/')
+##<string:restuarant_name> <--ACTUALLY:business_id?
+def restaurant(name):
+    # Create cursor
+    cur = mysql.connection.cursor()
 
-        if result > 0:
-            # Get stored hash
-            data = cur.fetchone()
-            password = data['password']
+    sql_query = (
+        "SELECT s.menu_item, s.description, s.price, r.rec_rating "
+        "FROM r_table AS r, s_table AS s "
+        "WHERE s.rest_name = %(name)s "
+        "AND s.business_id = r.business_id "
+        "AND s.menu_item = r.menu_item "
+        "ORDER BY r.rec_rating DESC"
+    )
+    # Get article
+    result = cur.execute(sql_query, {'name': name})
 
-            # Compare Passwords
-            if sha256_crypt.verify(password_candidate, password):
-                # Passed
-                session['logged_in'] = True
-                session['username'] = username
+    menu_items = cur.fetchall()
 
-                flash('You are now logged in', 'success')
-                return redirect(url_for('dashboard'))
-            else:
-                error = 'Invalid login'
-                return render_template('login.html', error=error)
-            # Close connection
-            cur.close()
-        else:
-            error = 'Username not found'
-            return render_template('login.html', error=error)
-
-    return render_template('login.html')
-
+    return render_template('restaurant.html', restaurant=name, results=menu_items)
 
 # About
 @app.route('/about')
@@ -262,16 +252,16 @@ def logout():
 def dashboard():
     # Create cursor
     cur = mysql.connection.cursor()
-
+    
     # Get articles
-    result = cur.execute("SELECT * FROM articles")
+    result = cur.execute("SELECT * FROM user_dash WHERE username = %s", [session.get('username')])
 
-    articles = cur.fetchall()
+    results = cur.fetchall()
 
     if result > 0:
-        return render_template('dashboard.html', articles=articles)
+        return render_template('dashboard.html', results=results)
     else:
-        msg = 'No Articles Found'
+        msg = 'No Saved Menu Items Found'
         return render_template('dashboard.html', msg=msg)
     # Close connection
     cur.close()
@@ -353,7 +343,6 @@ def edit_article(id):
 
 # Delete Article
 @app.route('/delete_article/<string:id>', methods=['POST'])
-##delete review or menu item from collection
 @is_logged_in
 def delete_article(id):
     # Create cursor
@@ -369,6 +358,98 @@ def delete_article(id):
     cur.close()
 
     flash('Article Deleted', 'success')
+
+    return redirect(url_for('dashboard'))
+
+# Add Review
+@app.route('/add_review', methods=['GET', 'POST'])
+##maybe used to add review instead
+@is_logged_in
+def add_review():
+    form = ArticleForm(request.form)
+    if request.method == 'POST' and form.validate():
+        title = form.title.data
+        body = form.body.data
+
+        # Create Cursor
+        cur = mysql.connection.cursor()
+
+        # Execute
+        cur.execute("INSERT INTO articles(title, body, author) VALUES(%s, %s, %s)",(title, body, session['username']))
+
+        # Commit to DB
+        mysql.connection.commit()
+
+        #Close connection
+        cur.close()
+
+        flash('Article Created', 'success')
+
+        return redirect(url_for('dashboard'))
+
+    return render_template('add_article.html', form=form)
+
+
+# Edit Review
+@app.route('/edit_article/<string:id>', methods=['GET', 'POST'])
+##maybe used to edit review instead
+@is_logged_in
+def edit_review(id):
+    # Create cursor
+    cur = mysql.connection.cursor()
+
+    # Get article by id
+    result = cur.execute("SELECT * FROM articles WHERE id = %s", [id])
+
+    article = cur.fetchone()
+    cur.close()
+    # Get form
+    form = ArticleForm(request.form)
+
+    # Populate article form fields
+    form.title.data = article['title']
+    form.body.data = article['body']
+
+    if request.method == 'POST' and form.validate():
+        title = request.form['title']
+        body = request.form['body']
+
+        # Create Cursor
+        cur = mysql.connection.cursor()
+        app.logger.info(title)
+        # Execute
+        cur.execute ("UPDATE articles SET title=%s, body=%s WHERE id=%s",(title, body, id))
+        # Commit to DB
+        mysql.connection.commit()
+
+        #Close connection
+        cur.close()
+
+        flash('Article Updated', 'success')
+
+        return redirect(url_for('dashboard'))
+
+    return render_template('edit_article.html', form=form)
+
+
+
+
+@app.route('/delete_item_from_dash', methods=['POST'])
+@is_logged_in
+def delete_item_from_dash(username, restaurant, menu_item):
+    # Create cursor
+    cur = mysql.connection.cursor()
+
+    # Execute
+    cur.execute("DELETE FROM user_dash WHERE username = %s AND rest_name = %s AND menu_item = %s", [username, restuarant, menu_item])
+
+    # Commit to DB
+    mysql.connection.commit()
+
+    #Close connection
+    cur.close()
+
+    flash('Menu Item Deleted', 'success')
 
     return redirect(url_for('dashboard'))
 
