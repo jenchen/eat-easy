@@ -9,6 +9,7 @@
       <th>Description</th>
       <th>Price</th>
       <th>Rating</th>
+      <th></th>
     </tr>
     {% for result in results %}
       <tr>
@@ -16,6 +17,11 @@
         <td>{{result.description}}</td>
         <td>{{result.price}}</td>
         <td>{{result.rec_rating}}</td>
+        <td>
+          {% if session.logged_in %}
+            <a href="add_review/{{restaurant}}/{{result.menu_item}}" class="btn btn-default pull-right">Add Review</a>
+          {% endif %}
+        </td>
       </tr>
     {% endfor %}
   </table>

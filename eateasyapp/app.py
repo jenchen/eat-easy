@@ -1,7 +1,7 @@
 from flask import Flask, render_template, flash, redirect, url_for, session, request, logging
 #from data import Articles
 from flask_mysqldb import MySQL
-from wtforms import Form, StringField, TextAreaField, PasswordField, validators
+from wtforms import Form, StringField, TextAreaField, PasswordField, FloatField, validators
 from passlib.hash import sha256_crypt
 from functools import wraps
 
@@ -253,8 +253,21 @@ def dashboard():
     # Create cursor
     cur = mysql.connection.cursor()
     
-    # Get articles
-    result = cur.execute("SELECT * FROM user_dash WHERE username = %s", [session.get('username')])
+    # 
+    sql_query = (
+        "SELECT s.rest_name, s.menu_item, s.description, s.price, r.rec_rating, u.user_rating, u.user_comments "
+        "FROM r_table AS r, s_table AS s, user_reviews as u "
+        "WHERE s.business_id = r.business_id "
+        "AND s.rest_name = u.rest_name "
+        "AND s.menu_item = r.menu_item "
+        "AND s.menu_item = u.menu_item "
+        "AND u.username = %(username)s"
+        "ORDER BY u.user_rating, r.rec_rating DESC"
+    )
+
+    result = cur.execute(sql_query, {'username': session['username']})
+
+    #old #result = cur.execute("SELECT * FROM user_reviews WHERE username = %s", [session.get('username')])
 
     results = cur.fetchall()
 
@@ -302,7 +315,6 @@ def add_article():
 
 # Edit Article
 @app.route('/edit_article/<string:id>', methods=['GET', 'POST'])
-##maybe used to edit review instead
 @is_logged_in
 def edit_article(id):
     # Create cursor
@@ -361,87 +373,91 @@ def delete_article(id):
 
     return redirect(url_for('dashboard'))
 
+# Review Form Class
+class ReviewForm(Form):
+    user_rating = FloatField('My Rating')
+    user_comments = TextAreaField('Comments')
+
 # Add Review
-@app.route('/add_review', methods=['GET', 'POST'])
-##maybe used to add review instead
+@app.route('/add_review/<string:restaurant>/<string:menu_item>', methods=['GET', 'POST'])
 @is_logged_in
-def add_review():
-    form = ArticleForm(request.form)
+def add_review(restaurant, menu_item):
+    form = ReviewForm(request.form)
     if request.method == 'POST' and form.validate():
-        title = form.title.data
-        body = form.body.data
+        user_rating = form.user_rating.data
+        user_comments = form.user_comments.data
 
         # Create Cursor
         cur = mysql.connection.cursor()
 
         # Execute
-        cur.execute("INSERT INTO articles(title, body, author) VALUES(%s, %s, %s)",(title, body, session['username']))
-
+        #cur.execute("INSERT INTO articles(title, body, author) VALUES(%s, %s, %s)",(title, body, session['username']))
+        cur.execute("INSERT INTO user_reviews VALUES(%s, %s, %s, %s, %s)",(session['username'], restaurant, menu_item, user_rating, user_comments))
         # Commit to DB
         mysql.connection.commit()
 
         #Close connection
         cur.close()
 
-        flash('Article Created', 'success')
+        flash('Review Created', 'success')
 
         return redirect(url_for('dashboard'))
 
-    return render_template('add_article.html', form=form)
+    return render_template('add_review.html', form=form)
 
 
 # Edit Review
-@app.route('/edit_article/<string:id>', methods=['GET', 'POST'])
-##maybe used to edit review instead
+@app.route('/edit_review/<string:restaurant>/<string:menu_item>', methods=['GET', 'POST'])
 @is_logged_in
-def edit_review(id):
+def edit_review(restaurant, menu_item):
     # Create cursor
     cur = mysql.connection.cursor()
 
     # Get article by id
-    result = cur.execute("SELECT * FROM articles WHERE id = %s", [id])
+    result = cur.execute("SELECT * FROM user_reviews WHERE username = %s AND rest_name = %s AND menu_item = %s", [session['username'], restaurant, menu_item])
 
-    article = cur.fetchone()
+    single_review = cur.fetchone()
     cur.close()
     # Get form
-    form = ArticleForm(request.form)
+    form = ReviewForm(request.form)
 
     # Populate article form fields
-    form.title.data = article['title']
-    form.body.data = article['body']
+    form.user_rating.data = single_review['user_rating']
+    form.user_comments.data = single_review['user_comments']
 
     if request.method == 'POST' and form.validate():
-        title = request.form['title']
-        body = request.form['body']
+        user_rating = request.form['user_rating']
+        user_comments = request.form['user_comments']
 
         # Create Cursor
         cur = mysql.connection.cursor()
-        app.logger.info(title)
+        app.logger.info(restaurant, menu_item)
         # Execute
-        cur.execute ("UPDATE articles SET title=%s, body=%s WHERE id=%s",(title, body, id))
+        #cur.execute ("UPDATE articles SET title=%s, body=%s WHERE id=%s",(title, body, id))
+        cur.execute ("UPDATE user_reviews SET user_rating=%s, user_comments=%s WHERE username=%s AND rest_name=%s AND menu_item=%s",(user_rating, user_comments, session['username'], restaurant, menu_item))
         # Commit to DB
         mysql.connection.commit()
 
         #Close connection
         cur.close()
 
-        flash('Article Updated', 'success')
+        flash('Review Updated', 'success')
 
         return redirect(url_for('dashboard'))
 
-    return render_template('edit_article.html', form=form)
+    return render_template('edit_review.html', form=form)
 
 
 
 
-@app.route('/delete_item_from_dash', methods=['POST'])
+@app.route('/delete_review/<string:restaurant>/<string:menu_item>', methods=['POST'])
 @is_logged_in
-def delete_item_from_dash(username, restaurant, menu_item):
+def delete_review(restaurant, menu_item):
     # Create cursor
     cur = mysql.connection.cursor()
 
     # Execute
-    cur.execute("DELETE FROM user_dash WHERE username = %s AND rest_name = %s AND menu_item = %s", [username, restuarant, menu_item])
+    cur.execute("DELETE FROM user_reviews WHERE username = %s AND rest_name = %s AND menu_item = %s", [session['username'], restaurant, menu_item])
 
     # Commit to DB
     mysql.connection.commit()
