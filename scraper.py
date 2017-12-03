@@ -112,4 +112,3 @@ for i in range (175, phoenix_addresses.shape[0]):
 		pass
 scraper.closeBrowser()
 scraper.write_to_csv()
-
