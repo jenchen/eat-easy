@@ -1,5 +1,4 @@
 from flask import Flask, render_template, flash, redirect, url_for, session, request, logging
-#from data import Articles
 from flask_mysqldb import MySQL
 from wtforms import Form, StringField, TextAreaField, PasswordField, FloatField, validators
 from passlib.hash import sha256_crypt
@@ -16,13 +15,10 @@ app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
 # init MYSQL
 mysql = MySQL(app)
 
-#Articles = Articles()
-
 # Index
 @app.route('/')
 def index():
     return render_template('home.html')
-
 
 @app.route('/search', methods=['GET', 'POST'])
 def search():
@@ -88,7 +84,6 @@ def restaurants():
 
 #Single Restaurant
 @app.route('/restaurant/<string:name>/')
-##<string:restuarant_name> <--ACTUALLY:business_id?
 def restaurant(name):
     # Create cursor
     cur = mysql.connection.cursor()
@@ -101,7 +96,7 @@ def restaurant(name):
         "AND s.menu_item = r.menu_item "
         "ORDER BY r.rec_rating DESC"
     )
-    # Get article
+    # Get menu items
     result = cur.execute(sql_query, {'name': name})
 
     menu_items = cur.fetchall()
@@ -113,10 +108,9 @@ def restaurant(name):
 def about():
     return render_template('about.html')
 
-
+"""
 # Articles
 @app.route('/articles')
-##/restuarants -- display all restuarants able to search
 def articles():
     # Create cursor
     cur = mysql.connection.cursor()
@@ -137,7 +131,6 @@ def articles():
 
 #Single Article
 @app.route('/article/<string:id>/')
-##<string:restuarant_name> <--ACTUALLY:business_id
 def article(id):
     # Create cursor
     cur = mysql.connection.cursor()
@@ -148,7 +141,7 @@ def article(id):
     article = cur.fetchone()
 
     return render_template('article.html', article=article)
-
+"""
 
 # Register Form Class
 class RegisterForm(Form):
@@ -253,7 +246,6 @@ def dashboard():
     # Create cursor
     cur = mysql.connection.cursor()
     
-    # 
     sql_query = (
         "SELECT s.rest_name, s.menu_item, s.description, s.price, r.rec_rating, u.user_rating, u.user_comments "
         "FROM r_table AS r, s_table AS s, user_reviews as u "
@@ -267,8 +259,6 @@ def dashboard():
 
     result = cur.execute(sql_query, {'username': session['username']})
 
-    #old #result = cur.execute("SELECT * FROM user_reviews WHERE username = %s", [session.get('username')])
-
     results = cur.fetchall()
 
     if result > 0:
@@ -279,6 +269,7 @@ def dashboard():
     # Close connection
     cur.close()
 
+"""
 # Article Form Class
 class ArticleForm(Form):
     title = StringField('Title', [validators.Length(min=1, max=200)])
@@ -372,6 +363,7 @@ def delete_article(id):
     flash('Article Deleted', 'success')
 
     return redirect(url_for('dashboard'))
+"""
 
 # Review Form Class
 class ReviewForm(Form):
@@ -391,7 +383,6 @@ def add_review(restaurant, menu_item):
         cur = mysql.connection.cursor()
 
         # Execute
-        #cur.execute("INSERT INTO articles(title, body, author) VALUES(%s, %s, %s)",(title, body, session['username']))
         cur.execute("INSERT INTO user_reviews VALUES(%s, %s, %s, %s, %s)",(session['username'], restaurant, menu_item, user_rating, user_comments))
         # Commit to DB
         mysql.connection.commit()
@@ -413,7 +404,7 @@ def edit_review(restaurant, menu_item):
     # Create cursor
     cur = mysql.connection.cursor()
 
-    # Get article by id
+    # Get review
     result = cur.execute("SELECT * FROM user_reviews WHERE username = %s AND rest_name = %s AND menu_item = %s", [session['username'], restaurant, menu_item])
 
     single_review = cur.fetchone()
@@ -421,7 +412,7 @@ def edit_review(restaurant, menu_item):
     # Get form
     form = ReviewForm(request.form)
 
-    # Populate article form fields
+    # Populate review form fields
     form.user_rating.data = single_review['user_rating']
     form.user_comments.data = single_review['user_comments']
 
@@ -433,7 +424,6 @@ def edit_review(restaurant, menu_item):
         cur = mysql.connection.cursor()
         app.logger.info(restaurant, menu_item)
         # Execute
-        #cur.execute ("UPDATE articles SET title=%s, body=%s WHERE id=%s",(title, body, id))
         cur.execute ("UPDATE user_reviews SET user_rating=%s, user_comments=%s WHERE username=%s AND rest_name=%s AND menu_item=%s",(user_rating, user_comments, session['username'], restaurant, menu_item))
         # Commit to DB
         mysql.connection.commit()
@@ -446,8 +436,6 @@ def edit_review(restaurant, menu_item):
         return redirect(url_for('dashboard'))
 
     return render_template('edit_review.html', form=form)
-
-
 
 
 @app.route('/delete_review/<string:restaurant>/<string:menu_item>', methods=['POST'])
